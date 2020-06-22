@@ -1,0 +1,320 @@
+---
+title: "IDV_Learners_Proj"
+author: "Coco Ying"
+date: "6/21/2020"
+output:
+  pdf_document: 
+    latex_engine: xelatex
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# 1. Overview
+
+## 1.1 Introduction
+
+This is the IDV_Learners capstone project for HarvardX: PH125.9x Data Science: Capstone. The goal of this project is to apply machine learning techniques taught throughout HarvardX Data Science Professional Certificate Program to a self-selected dataset and create a project of our own. This is a wine quality prediction project using data analysis techniques and machine learning algorithms to effectively produce accurate results. This report includes the details of this project from data cleaning, data exploration, data visualization, model building, model performance, and conclusion. 
+
+## 1.2 Dataset
+
+According to the project overview page, UCI Machine Learning Repository and Kaggle are two suggested websites in dataset selection. The chosen dataset is a multivariate "Wine Quality Data Set" from UCI. The complete dataset contains two separate red and white data sets of 12 chemical attributes of wine quality in numerical form. The **white wine data set** is the chosen dataset for this project, with more description in the next chapter.  
+
+### Dataset Link of the Selected Wine Quality Dataset
+*  https://archive.ics.uci.edu/ml/machine-learning-databases/wine-quality/  
+
+### Dataset Reference
+*  https://archive.ics.uci.edu/ml/index.php  
+*  https://www.kaggle.com/datasets  
+
+## 1.3 Purpose
+
+The purpose of this project is to create an accurate wine quality prediction system using multiple machine learning techniques. The selected evaluation criterion or loss function is RMSE (Root Mean Square Error). The main goal in model construction is to generate a model that is low in RMSE and accurate in prediction. The following is the definition of RMSE:
+
+$$ RMSE = \sqrt{\frac{1}{n}\displaystyle\sum_{i=1}^{n} (\hat{y}_{i}-y_{i})^{2}} .$$  
+
+# 2. Methods and Analysis
+
+## 2.1 Data Preparation
+
+### 2.1.1 Loading Package
+
+The following packages are required in generating models of this report (tidyverse, caret, data.table, ggplot2, hrbrthemes, corrplot, factoextra, class, e1071, rpart, rpart.plot, and gridExtra):
+
+```{r, include=TRUE, echo=FALSE, warning=FALSE}
+if(!require(tidyverse)) install.packages("tidyverse", repos = "http://cran.us.r-project.org")
+if(!require(caret)) install.packages("caret", repos = "http://cran.us.r-project.org")
+if(!require(data.table)) install.packages("data.table", repos = "http://cran.us.r-project.org")
+if(!require(ggplot2)) install.packages("ggplot2")
+if(!require(hrbrthemes)) install.packages("hrbrthemes")
+if(!require(corrplot)) install.packages("corrplot")
+if(!require(factoextra)) install.packages("factoextra")
+if(!require(class)) install.packages("class")
+if(!require(e1071)) install.packages("e1071")
+if(!require(rpart)) install.packages("rpart")
+if(!require(rpart.plot)) install.packages("rpart.plot")
+if(!require(gridExtra)) install.packages("gridExtra")
+```
+
+### 2.1.2 Data Loading
+
+The data preparation process includes data loading, cleaning and partitioning. For data loading, both red and white wine datasets are loaded. In order to determine which dataset should be chosen for this project, we determine the dimensions and attributes of both red and white. The attributes of both red and white are the same 12 attributes (fixed.acidity, volatile.acidity, citric.acid, residual.sugar, chlorides, free.sulfur.dioxide, total.sulfur.dioxide, density, pH, sulphates, alcohol, and quality). Whereas the numeber of data for red is 1599 and 4898 for white. Since there are much more data for white wines, the selected dataset for modeling is the **white wine data set**.
+
+```{r, include=TRUE, echo=TRUE, warning=FALSE}
+# Load Red Wine Data 
+red_wine <- tempfile()
+download.file("https://archive.ics.uci.edu/ml/machine-learning-databases/wine-quality/winequality-red.csv", red_wine)
+r_wine <- read.csv(file=red_wine, sep=";")
+head(r_wine)
+dim(r_wine)
+
+# Load White Wine Data 
+white_wine <- tempfile()
+download.file("https://archive.ics.uci.edu/ml/machine-learning-databases/wine-quality/winequality-white.csv", white_wine)
+w_wine <- read.csv(file=white_wine, sep=";")
+head(w_wine)
+dim(w_wine)
+```
+
+### 2.1.3 Data Cleaning and Partitioning
+
+The NA values of data are then examined through the data cleaning process. In this case, the white wine dataset does not have any NA values. Since no values has to be eliminated from the original data set, we move on to data partitioning. The data is partitioned into 90% training and 10% testing set and referred to as "train" and "test" sets.
+
+```{r, include=TRUE, echo=TRUE, warning=FALSE}
+# Data Cleaning
+sapply(w_wine, function(x) sum(is.na(x))) #No NA values for the combined dataset
+
+# Data Partition (10% Testing)
+set.seed(1, sample.kind="Rounding") #Version used: R 3.6.2
+test_index <- createDataPartition(y = w_wine$quality, times = 1, p = 0.1, list = FALSE)
+train <- w_wine[-test_index,]
+test <- w_wine[test_index,]
+```
+
+## 2.2 Data Exploration and Visualization
+
+### 2.2.1 Data Summary
+
+The first step in data exploration and visualization is to check number of data in test and train sets and summarize data of **train** set. The results show that number of data of test set is indeed approximately 10% of the white wine set. Then, the summary show all 12 attributes as well as statistical summary of the dataset.
+
+```{r, include=TRUE, echo=TRUE, warning=FALSE}
+# Check testing percentage is correct (approx = 10%)
+dim(test)[1]/(dim(train)[1]+dim(test)[1])
+
+# Overview/Summary of Data
+head(train)
+summary(train)
+```
+
+### 2.2.2 Data Visualization- Histogram
+
+In order to train a proper model for this dataset, we have to understand the nature of this dataset. To do so, first, we visualize each of the 12 attributes to find out its distribution. The results below are the overview of 12 attributes in histogram form.
+
+```{r, include=TRUE, echo=FALSE, warning=FALSE}
+# Histogram Overview of Each Variable
+par(mfrow=c(2,3))
+for(i in 1:6) {
+  hist(train[,i], main=names(train)[i], xlab="Values", col="orange")
+}
+for(i in 7:12) {
+  hist(train[,i], main=names(train)[i], xlab="Values", col="orange")
+}
+```
+
+As we can see, most of the attributes show somewhat of a normal distribution pattern. The first 11 attributes are continuous, while quality rankings are discrete ranked from 3 to 9. Therefore, both regression and classification are suitable for model building of this dataset.
+
+### 2.2.2 Data Visualization- Correlation
+
+Since we have concluded that both regression and classification may be suitable for model building of this dataset, we could examine relationships between individual attributes through finding their correlation between each other. The following shows the correlation table and the visualized correlation plot.
+
+```{r, include=TRUE, echo=FALSE, warning=FALSE}
+# Correlation Summary
+# Try to find out possible models for this dataset
+cor_val<-cor(train) #No direct correlation between other factors and quality but alcohol has highest correlation of 0.4383
+cor_val
+# Correlation Plot 
+corrplot(round(cor_val,4), type="upper", order="hclust", tl.col="black", tl.srt =45)
+#Find the darkest color dots and graph
+```
+
+As we can see above, there are several correlations that are dark in red and blue (negative and positive correlations). The top three relations are chosen and plotted against each other, as shown below.
+
+```{r, include=TRUE, echo=FALSE, warning=FALSE}
+# Find variables of highest correlation and graph them 
+# Residual sugar & density 0.8396
+par(mfrow=c(1,1))
+p1 <- ggplot(train, aes(x=residual.sugar, y=density)) +
+  geom_point() +
+  geom_smooth(method=lm , color="red", fill="#69b3a2", se=TRUE) 
+# Alcohol & density -0.7780
+p2 <- ggplot(train, aes(x=alcohol, y=density)) +
+  geom_point() +
+  geom_smooth(method=lm , color="red", fill="#69b3a2", se=TRUE) 
+# Free sulfur dioxide & total.sulfur.dioxide 0.6162
+p3 <- ggplot(train, aes(x=free.sulfur.dioxide, y=total.sulfur.dioxide)) +
+  geom_point() +
+  geom_smooth(method=lm , color="red", fill="#69b3a2", se=TRUE) 
+
+grid.arrange(p1,p2,p3,ncol=3)
+```
+
+Then, we determine whether or not the attributes should be trimmed using PCA (Principle component analysis). Since contributions of each individual component are not significant, we make a decision of not using PCA in our model.
+
+```{r, include=TRUE, echo=FALSE, warning=FALSE}
+pca<- prcomp(train, center=TRUE, scale.=TRUE)
+fviz_eig(pca) #Visualized PCA
+```
+
+## 2.3 Summary of Methods and Analysis
+* Relationship between attributes are visible, but there are no single attribute that strongly affects wine quality, instead we should take all attributes in consideration during model building
+* No need of dimension reduction using PCA since number of attributes are limited and individual contributions are small
+* Suiting model types include classification and regression, but regression would probably be superior to classification since all 11 attributes are numerical instead of categorical.
+
+# 3. Results
+
+The results section includes evaluation metrics, modeling process, and model results. The modeling techinque used in this section consist of naive, regression, and classification methods. In precise, naive approach, Knn, regression tree, linear regression, and SVR (Support Vector Regression) are used. The results differ from the use of methods, with SVR being the best result of all.
+
+## 3.1 Evaluation Metric/Loss Function
+
+The evaluation metric or loss function used in this project is RMSE, a popular indicator of differences between predicted values and true values. RMSE is commonly used in the evaluation of models in machine learning. The equation of RMSE is stated below:
+
+$$ RMSE = \sqrt{\frac{1}{n}\displaystyle\sum_{i=1}^{n} (\hat{y}_{i}-y_{i})^{2}} $$
+```{r, include=TRUE, echo=FALSE, warning=FALSE}
+#Loss Function (Evaluation Formula)
+RMSE <- function(tru_ratings, pred_ratings){
+  sqrt(mean((tru_ratings - pred_ratings)^2))
+}
+```
+
+## 3.2 Modeling
+
+### 3.2.1 Model 1: Naive Model
+
+The first step of modeling is to generate a **naive model** through calculating mean of train set and use this mean to predict results of test set. The RMSE for the naive model is 0.90455.
+
+```{r, include=TRUE, echo=TRUE, warning=FALSE}
+# Model 1: Naive Model (RMSE=0.90455)
+#Starting RMSE 
+mu_hat <- mean(train$quality)
+RMSE_1<-RMSE(test$quality, mu_hat) 
+rmse_table<- data.table(Method="Naive", Type="Mean", RMSE=RMSE_1)
+rmse_table %>%knitr::kable()
+```
+
+### 3.2.2 Model 2: Knn
+
+The second model we consider is **Knn (K-nearest-neighbor)**, a classification method with the goal of grouping datapoint through lexamining the datapoints around it. The "K" in Knn is the number of nearest neighbors considered. In order to find an appropriate Knn model, the k value has to be optimized. In this case, the optimized k value is 49. Which is the k-value used in the modeling process as shown in the code below. As we can see, this optimization method is not suiting for this dataset, since RMSE obtained from this model is 2.1806. The possible reason that this model is inappropriate is that Knn is a classification method that does not deal with dimentionality well. It is a type of instance-based (lazy learning) method that has a strength in approximation.
+
+```{r, include=TRUE, echo=TRUE, warning=FALSE}
+# Model 2: Optimized Knn (RMSE=2.1806196)
+set.seed(1)
+train_knn<- train(quality ~ ., method = "knn", 
+                  data = train,
+                  tuneGrid = data.frame(k = seq(3, 51, 2)))
+train_knn #use k=49
+X_tr_knn=train[,1:11]
+Y_tr_knn=train$quality
+X_ts_knn=test[,1:11]
+Y_ts_knn=test$quality
+ts_knn=test[,1:11]
+mod_2 <- knn(train=scale(X_tr_knn), test=scale(X_ts_knn), cl=Y_tr_knn, k=c(train_knn$bestTune), prob=TRUE)
+RMSE_2 <- RMSE(test$quality, c(mod_2)) #2.154
+rmse_table <- bind_rows(rmse_table, 
+                        data_frame(Method="Knn",
+                                   Type="Classification",
+                                   RMSE = RMSE_2))
+rmse_table %>%knitr::kable()
+```
+
+### 3.2.3 Model 3: Regression Tree
+
+The third model we consider is **regression tree**, which is a classification method where target variables can be continuous. This method would be an improvement from Knn due to its property of being able to classify continuous values. First, the predictions regression tree is calcualted without cost penalty. Then, generated with appropriate penalty using 10-fold cross validation. The terminal nodes obtained from the initial regression tree is 7. We use this number in the model with cross validation, the next plot shows the plot of cost complexity parameter and red dotted line at size of tree being 7. With size of tree over 7, we can see that the rate of change in X-val error slows down. Therefore, this is an appropriate regression tree model with a RMSE of 0.7525, much better than the naive model.
+
+```{r, include=TRUE, echo=TRUE, warning=FALSE}
+# Model 3: Regression Tree (RMSE=0.7525170)
+par(mfrow=c(1,1))
+fit_a<- rpart(quality ~ ., data = train, 
+              method="anova")
+rpart.plot(fit_a)
+predict_a <-predict(fit_a, newdata=test)
+
+fit_b<- rpart(quality ~ ., data = train, 
+              method="anova",
+              control=list(cp=0, xval=10)) #10-fold cross validation
+predict_b <-predict(fit_b, newdata=test)
+plotcp(fit_b)
+abline(v=7, lty="dashed",col = "red")
+RMSE_3 <- RMSE(test$quality, predict_b)
+rmse_table <- bind_rows(rmse_table, 
+                        data_frame(Method="Regression Tree",
+                                   Type="Classification",
+                                   RMSE = RMSE_3))
+rmse_table %>%knitr::kable()
+```
+
+### 3.2.4 Model 4: Linear Regression (1 attribute)
+
+After examining classification methods, we move on to regression models. The fourth model to examine is the simplest **linear regression with one attribute**. As previously found in the correlation table, the relationship between the attribute "alcohol" and "quality" is the most vivid amongst all. Therefore, we use the simplest linear regression model in generating our RMSE of 0.8245, which is an improvement from the naive model but worse than regression tree. This model is too simple in determining a precise prediction.
+
+```{r, include=TRUE, echo=TRUE, warning=FALSE}
+
+# Model 4: Linear Regression (Alcohol) (RMSE=0.8244660)
+fit <- lm(quality~alcohol, data=train)
+mod_4<- fit$coef[1]+fit$coef[2]*test$alcohol
+RMSE_4<- RMSE(test$quality, mod_4) #0.82447
+rmse_table <- bind_rows(rmse_table, 
+                        data_frame(Method="LM_Alcohol",
+                                   Type="Regression",
+                                   RMSE = RMSE_4))
+rmse_table %>%knitr::kable()
+```
+
+### 3.2.5 Model 5: Linear Regression (2 attributes)
+
+Since the model previously created is too simple, the fifth model is a linear regression with two main attributes alcohol and density. The results show RMSE of 0.8247, meaning that the relations between quality and the two attributes are not direct contributions that can be modeled using simple linear regression. The attributes have correlations with each other, that requires the use of higher order and complex regression methods.
+
+```{r, include=TRUE, echo=TRUE, warning=FALSE}
+# Model 5: Linear Regression (Alcohol+Density) (RMSE=0.8247146)
+fit_2 <- lm(quality~alcohol+density, data=train)
+mod_5 <-fit_2$coef[1]+fit_2$coef[2]*test$alcohol+fit_2$coef[3]*test$density
+RMSE_5 <- RMSE(test$quality, mod_5) #0.82471
+rmse_table <- bind_rows(rmse_table, 
+                        data_frame(Method="LM_Alcohol+Density",
+                                   Type="Regression",
+                                   RMSE = RMSE_5))
+rmse_table %>%knitr::kable()
+```
+
+### 3.2.6 Model 6: Support Vector Regression (SVR)
+
+The sixth model we used is the **Support Vector Regression (SVR)**. The more well known method is the Support Vector Machine (SVM), a classification method. SVR is an altered regression version of SVM. SVR is an effective algorithm in estimating real-values. It benefits in estimation through strongly penalizing misestimates. In our SVR model, all 11 other attributes are used in estimating the quality attribute. Through adjusting tune parameters cost and width of error tolerance (epsilon), the resulting RMSE is the best result of 0.704.
+
+```{r, include=TRUE, echo=TRUE, warning=FALSE}
+# Model 6: SVR (RMSE=0.7042508)
+mod_6 <- svm(quality~fixed.acidity+volatile.acidity+citric.acid+residual.sugar+chlorides+free.sulfur.dioxide+total.sulfur.dioxide+density+pH+sulphates+alcohol, data=train, cost=5, epsilon=0.1) 
+predict_6<- predict(mod_6, newdata=test)
+RMSE_6 <- RMSE(test$quality, predict_6) #0.70425
+rmse_table <- bind_rows(rmse_table, 
+                        data_frame(Method="SVR",
+                                   Type="Regression",
+                                   RMSE = RMSE_6))
+rmse_table %>%knitr::kable()
+```
+
+
+# 4. Conclusion
+
+Through analyzing data and generating multiple machine learning models to predict wine quality, we have acheived a RMSE value of 0.70425 using the SVR model. In the beginning, we cleaned and partitioned the dataset. Then, use statistical methods and visualization to examine the dataset. The histograms, correlation table, and PCA are all methods that help us in determining the types of models to use later. After analyzing dataset, we have concluded that both classification and regression methods could be used for modeling, with a preference of regression due to dataset properties. In the modeling process, some models (especially Knn) suffers from its classification characteristic of not being able to successfully group models of too many attributes. Other models such as linear regression and naive method fail to predict well enough since they are too simple or they only consider relationship between the attributes and quality instead of interactions between all attributes. Whereas the two better models are regression tree and SVR since they both succeed in the consideration of multiple attributes and able to deal with continuous attributes rather than categorical attributes.  
+
+The limitations of this dataset include the lack of categorical value or descriptors. This dataset is mainly based on chemicals and their values. If there were other characteristics such as grape variety and region, these categorical attributes may help in modeling. Whereas the limitations of this work is that we only take white wine dataset into consideration. For future work, this work can be expanded into combining white and red dataset to generate a wholesome prediction model.
+
+\pagebreak
+
+# Appendix
+## Environment
+```{r, include=TRUE, echo=FALSE, warning=FALSE}
+print("Operating System:")
+version
+```
+
