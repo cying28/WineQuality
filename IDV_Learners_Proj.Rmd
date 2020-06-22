@@ -1,7 +1,7 @@
 ---
-title: "IDV_Learners_Proj"
+title: "HarvardX: PH125.9x Data Science: Capstone - IDV Learners Project - Wine Quality Prediction"
 author: "Coco Ying"
-date: "6/21/2020"
+date: "6/22/2020"
 output:
   pdf_document: 
     latex_engine: xelatex
